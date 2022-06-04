@@ -60,7 +60,9 @@ ws.on("message", (data) => {
           if (!fileStreamPackets) {
             throw new Error("This error should never happen.");
           }
-          fileStreamPackets.write(JSON.stringify(packet) + "\n");
+          fileStreamPackets.write(
+            JSON.stringify({ ...packet, dateReceived: new Date() }) + "\n"
+          );
         });
 
         cachePackets.length = 0;
