@@ -1,8 +1,8 @@
+import fs from "fs-extra";
+import { join } from "path";
 import WebSocket from "ws";
 import { SOS } from "./sosPluginEvents";
 import { isMiscPacket } from "./utils";
-import fs from "fs-extra";
-import { join } from "path";
 
 console.log("Starting...");
 
@@ -16,37 +16,65 @@ let lastEventCount = 0;
 let lastEvent = "";
 let lastDate = new Date();
 let gameId = "";
-let fileStream: fs.WriteStream | null = null;
-let fileStreamReady = false;
-const cache: string[] = [];
+let fileStreamCount: fs.WriteStream | null = null;
+let fileStreamCountReady = false;
+let fileStreamPackets: fs.WriteStream | null = null;
+let fileStreamPacketsReady = false;
+const cacheCount: string[] = [];
+const cachePackets: SOS.Packet[] = [];
 
 ws.on("message", (data) => {
   const parsed: SOS.Packet = JSON.parse(data.toString());
 
   if (isMiscPacket(parsed)) {
     if (parsed.data.match_guid !== gameId) {
-      console.log("NEW GAME");
-      if (fileStream) {
-        fileStream.close();
-        fileStream = null;
+      console.log(`NEW GAME`);
+      if (fileStreamCount) {
+        fileStreamCount.close();
+        fileStreamCount = null;
       }
       gameId = parsed.data.match_guid;
-      const path = join(__dirname, "..", "out", gameId + ".game");
-      fileStream = fs.createWriteStream(path);
-      fileStream.on("open", () => {
-        fileStreamReady = true;
-        cache.forEach((str: string) => {
-          if (!fileStream) {
+      console.log(`GAME ID: ${gameId}`);
+      const countPath = join(__dirname, "..", "out", gameId + ".game");
+      fileStreamCount = fs.createWriteStream(countPath);
+      fileStreamCount.on("open", () => {
+        fileStreamCountReady = true;
+        cacheCount.forEach((str: string) => {
+          if (!fileStreamCount) {
             throw new Error("This error should never happen.");
           }
-          fileStream.write(str);
+          fileStreamCount.write(str);
         });
-        cache.length = 0;
+
+        cacheCount.length = 0;
       });
-      fileStream.on("close", () => {
-        fileStreamReady = false;
+      fileStreamCount.on("close", () => {
+        fileStreamCountReady = false;
+      });
+
+      const packetsPath = join(__dirname, "..", "out", gameId + ".packets");
+      fileStreamPackets = fs.createWriteStream(packetsPath);
+      fileStreamPackets.on("open", () => {
+        fileStreamPacketsReady = true;
+        cachePackets.forEach((packet) => {
+          if (!fileStreamPackets) {
+            throw new Error("This error should never happen.");
+          }
+          fileStreamPackets.write(JSON.stringify(packet) + "\n");
+        });
+
+        cachePackets.length = 0;
+      });
+      fileStreamPackets.on("close", () => {
+        fileStreamPacketsReady = false;
       });
     }
+  }
+
+  if (fileStreamPacketsReady && fileStreamPackets) {
+    fileStreamPackets.write(JSON.stringify(parsed) + "\n");
+  } else {
+    cachePackets.push(parsed);
   }
 
   if (parsed.event === lastEvent) {
@@ -57,17 +85,17 @@ ws.on("message", (data) => {
     if (lastEventCount) {
       console.log(timeString(lastDate), lastEvent, "x", lastEventCount);
 
-      if (fileStream) {
+      if (fileStreamCount) {
         const str = "".concat(
           timeString(lastDate),
           lastEvent,
           " x ",
           lastEventCount + "\n"
         );
-        if (fileStreamReady) {
-          fileStream.write(str);
+        if (fileStreamCountReady) {
+          fileStreamCount.write(str);
         } else {
-          cache.push(str);
+          cacheCount.push(str);
         }
       }
     }

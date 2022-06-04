@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@types/fs-extra": "^9.0.13",
+    "@types/node": "^17.0.39",
     "@types/polka": "^0.5.3"
   }
 }
